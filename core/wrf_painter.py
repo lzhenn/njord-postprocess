@@ -132,25 +132,130 @@ class WRFPainter(painter.Painter):
         draw 2d spatial 2-m reletive humidity map
         ifrm: ith frame in wrf_list
         '''
-        pass
+        varname='rh2'
+        title_txt=varname+'@'+str(self.time_frms[ifrm])
+        utils.write_log('paint '+title_txt)
+        var = wrf.getvar(self.wrf_list, varname, timeidx=ifrm)
+        
+        ax=self.set_canvas_common(var)
+        
+        cmap=cmaps.BlGrYeOrReVi200
+        levels=np.linspace(1,100,50)
+        
+        plt.contourf(
+                wrf.to_np(self.lons), wrf.to_np(self.lats), 
+                wrf.to_np(var),
+                levels=levels, extend='both', 
+                transform=ccrs.PlateCarree(), cmap=cmap)
+        
+        plt.title(title_txt, fontsize=SMFONT)
+
+        # Add a color bar
+        plt.colorbar(ax=ax, shrink=0.7)
+        
+        self.savefig(plt, varname, ifrm)
     
     def draw2d_map_wind10(self, ifrm):
         '''
-        draw 2d spatial 2-m reletive humidity map
+        draw 2d spatial uv vector and speed 
         ifrm: ith frame in wrf_list
         '''
-        pass
+        varname='UV10'
+        title_txt=varname+'@'+str(self.time_frms[ifrm])
+        utils.write_log('paint '+title_txt)
+        u = wrf.getvar(self.wrf_list, 'U10', timeidx=ifrm)
+        v = wrf.getvar(self.wrf_list, 'V10', timeidx=ifrm)
+        var = u
+        var.data = np.power((np.power(u.data,2)+np.power(v.data,2)),0.5)
+        
+        ax=self.set_canvas_common(var)
+        
+        cmap=cmaps.BlGrYeOrReVi200
+        levels=np.linspace(0,50,50)
+        
+        shad = plt.contourf(
+                wrf.to_np(self.lons), wrf.to_np(self.lats), 
+                wrf.to_np(var),
+                levels=levels, extend='both', 
+                transform=ccrs.PlateCarree(), cmap=cmap)
+        
+        q_mis=8 # wind vector plotting every q_miss grid
+        quv = axe.quiver(wrf.to_np(self.lons[::q_mis,::q_mis]),
+                   wrf.to_np(self.lats[::q_mis,::q_mis]),
+                   wrf.to_np(u[::q_mis,::q_mis]),wrf.to_np(v[::q_mis,::q_mis]),
+                   pivot='mid',units='inches',scale=30,
+                   scale_units='inches',color="dimgray",
+                   width=0.02,headwidth=3,headlength=4.5,transform=ccrs.PlateCarree())
+
+        plt.quiverkey(quv, 0.87, 0.45, 10, r'$10 m/s$', labelpos='N',
+                       coordinates='figure')
+        
+        plt.title(title_txt, fontsize=SMFONT)
+
+        # Add a color bar
+        plt.colorbar(shad, ax=ax, shrink=0.7)
+        
+        self.savefig(plt, varname, ifrm)
     
     def draw2d_map_pr3h(self):
         '''
         draw 2d spatial 3-hr total precipitation map
         ifrm: ith frame in wrf_list
         '''
-        pass
+        varname='pr3h'
+        title_txt=varname+'@'+str(self.time_frms[ifrm])
+        utils.write_log('paint '+title_txt)
+        var = wrf.getvar(self.wrf_list, 'RAINC', timeidx=ifrm)
+        var.data = wrf.to_np(wrf.getvar(self.wrf_list, 'RAINNC', timeidx=ifrm))+
+                   wrf.to_np(wrf.getvar(self.wrf_list, 'RAINC', timeidx=ifrm))-
+                   wrf.to_np(wrf.getvar(self.wrf_list, 'RAINNC', timeidx=(ifrm-3)))-
+                   wrf.to_np(wrf.getvar(self.wrf_list, 'RAINC', timeidx=(ifrm-3)))
+
+        ax=self.set_canvas_common(var)
+        
+        cmap = cmaps.precip2_17lev
+        levels = [0.1,0.5,1,3,5,10,15,20,30,40,60,80,100,120,150,200,250] 
+        norm = matplotlib.colors.BoundaryNorm(boundaries=levels, 
+            ncolors=cmap.N,extend='both')
+
+        plt.contourf(
+                wrf.to_np(self.lons), wrf.to_np(self.lats), 
+                wrf.to_np(var),
+                levels=levels, extend='both', 
+                transform=ccrs.PlateCarree(), cmap=cmap,norm=norm)
+        
+        plt.title(title_txt, fontsize=SMFONT)
+
+        # Add a color bar
+        plt.colorbar(ax=ax, shrink=0.7)
+        
+        self.savefig(plt, varname, ifrm)
 
     def draw2d_map_slp(self):
         '''
         draw 2d spatial sea level pressure map
         ifrm: ith frame in wrf_list
         '''
-        pass
+        varname='slp'#'hPa'
+        title_txt=varname+'@'+str(self.time_frms[ifrm])
+        utils.write_log('paint '+title_txt)
+        var = wrf.getvar(self.wrf_list, varname, timeidx=ifrm)
+        
+        ax=self.set_canvas_common(var)
+        
+        cmap=cmaps.BlGrYeOrReVi200
+        levels=np.linspace(950,1050,101)
+        
+        plt.contourf(
+                wrf.to_np(self.lons), wrf.to_np(self.lats), 
+                wrf.to_np(var),
+                levels=levels, extend='both', 
+                transform=ccrs.PlateCarree(), cmap=cmap)
+        
+        plt.title(title_txt, fontsize=SMFONT)
+
+        # Add a color bar
+        plt.colorbar(ax=ax, shrink=0.7)
+        
+        self.savefig(plt, varname, ifrm)
+    
