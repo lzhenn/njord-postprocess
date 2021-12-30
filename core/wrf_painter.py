@@ -9,7 +9,6 @@ from netCDF4 import Dataset
 
 import cmaps
 import numpy as np
-import xarray as xr
 import cartopy.crs as ccrs
 import cartopy.io.shapereader as shpreader
 import shapely.geometry as sgeom
@@ -53,9 +52,9 @@ class WRFPainter(painter.Painter):
                 shell=True).decode('utf-8')
         
         fn_list=fn_stream.split()
+        self.file_list=fn_list
         wrf_list=[Dataset(itm) for itm in fn_list]
         self.wrf_idom=dom_id
-        self.wrf_list=wrf_list
         self.wrf_num_file=len(wrf_list)
 
         self.time_frms=wrf.extract_times(
@@ -63,7 +62,7 @@ class WRFPainter(painter.Painter):
                 method='cat', do_xtime=False)
         
         
-        lsmask = wrf.getvar(self.wrf_list[0], 'LANDMASK')
+        lsmask = wrf.getvar(wrf_list[0], 'LANDMASK')
         
         # Get the latitude and longitude points
         self.lats, self.lons = wrf.latlon_coords(lsmask)
@@ -97,16 +96,23 @@ class WRFPainter(painter.Painter):
                 self.fig_root+'/'+self.init_ts
                 +'/'+self.wrf_idom+'.'+varname+'.p%03d.' % ifrm, 
                 dpi=120, bbox_inches='tight')
-   
-    def draw2d_map_t2(self, ifrm):
+
+    def get_single_var2d(self, varname, ifrm):
+        '''get single var 2D in ifrm from wrf file'''
+        wrf_file=Dataset(self.file_list[ifrm])
+        var = wrf.getvar(wrf_file, varname, timeidx=0)
+        return var
+
+    def draw2d_map_t2(self, ifrm, itsk=0):
         '''
         draw 2d spatial 2-m temperature map
         ifrm: ith frame in wrf_list
         '''
         varname='T2'
         title_txt=varname+'@'+str(self.time_frms[ifrm])
-        utils.write_log('paint '+title_txt)
-        var = wrf.getvar(self.wrf_list, varname, timeidx=ifrm)
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+        
+        var = self.get_single_var2d(varname, ifrm)
         
         ax=self.set_canvas_common(var)
         
@@ -127,15 +133,16 @@ class WRFPainter(painter.Painter):
         self.savefig(plt, varname, ifrm)
 
 
-    def draw2d_map_rh2(self, ifrm):
+    def draw2d_map_rh2(self, ifrm, itsk=0):
         '''
         draw 2d spatial 2-m reletive humidity map
         ifrm: ith frame in wrf_list
         '''
         varname='rh2'
         title_txt=varname+'@'+str(self.time_frms[ifrm])
-        utils.write_log('paint '+title_txt)
-        var = wrf.getvar(self.wrf_list, varname, timeidx=ifrm)
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+        
+        var = self.get_single_var2d(varname, ifrm)
         
         ax=self.set_canvas_common(var)
         
@@ -155,16 +162,17 @@ class WRFPainter(painter.Painter):
         
         self.savefig(plt, varname, ifrm)
     
-    def draw2d_map_wind10(self, ifrm):
+    def draw2d_map_wind10(self, ifrm, itsk=0):
         '''
         draw 2d spatial uv vector and speed 
         ifrm: ith frame in wrf_list
         '''
         varname='UV10'
         title_txt=varname+'@'+str(self.time_frms[ifrm])
-        utils.write_log('paint '+title_txt)
-        u = wrf.getvar(self.wrf_list, 'U10', timeidx=ifrm)
-        v = wrf.getvar(self.wrf_list, 'V10', timeidx=ifrm)
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+        u = self.get_single_var2d('U10', ifrm)
+        v = self.get_single_var2d('V10', ifrm)
+        
         var = u
         var.data = np.power((np.power(u.data,2)+np.power(v.data,2)),0.5)
         
@@ -180,7 +188,7 @@ class WRFPainter(painter.Painter):
                 transform=ccrs.PlateCarree(), cmap=cmap)
         
         q_mis=8 # wind vector plotting every q_miss grid
-        quv = axe.quiver(wrf.to_np(self.lons[::q_mis,::q_mis]),
+        quv = ax.quiver(wrf.to_np(self.lons[::q_mis,::q_mis]),
                    wrf.to_np(self.lats[::q_mis,::q_mis]),
                    wrf.to_np(u[::q_mis,::q_mis]),wrf.to_np(v[::q_mis,::q_mis]),
                    pivot='mid',units='inches',scale=30,
@@ -197,19 +205,23 @@ class WRFPainter(painter.Painter):
         
         self.savefig(plt, varname, ifrm)
     
-    def draw2d_map_pr3h(self):
+    def draw2d_map_pr3h(self, ifrm, itsk=0):
         '''
         draw 2d spatial 3-hr total precipitation map
         ifrm: ith frame in wrf_list
         '''
+        if ifrm<3:
+            return
         varname='pr3h'
         title_txt=varname+'@'+str(self.time_frms[ifrm])
-        utils.write_log('paint '+title_txt)
-        var = wrf.getvar(self.wrf_list, 'RAINC', timeidx=ifrm)
-        var.data = wrf.to_np(wrf.getvar(self.wrf_list, 'RAINNC', timeidx=ifrm))+
-                   wrf.to_np(wrf.getvar(self.wrf_list, 'RAINC', timeidx=ifrm))-
-                   wrf.to_np(wrf.getvar(self.wrf_list, 'RAINNC', timeidx=(ifrm-3)))-
-                   wrf.to_np(wrf.getvar(self.wrf_list, 'RAINC', timeidx=(ifrm-3)))
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+        var0c = self.get_single_var2d('RAINC', ifrm)
+        var0nc = self.get_single_var2d('RAINNC', ifrm)
+        var3c = self.get_single_var2d('RAINC', ifrm-3)
+        var3nc = self.get_single_var2d('RAINNC', ifrm-3)
+        var = var0c
+        var.data = (wrf.to_np(var0c) + wrf.to_np(var0nc) - wrf.to_np(var3c)
+                - wrf.to_np(var3nc))
 
         ax=self.set_canvas_common(var)
         
@@ -231,16 +243,15 @@ class WRFPainter(painter.Painter):
         
         self.savefig(plt, varname, ifrm)
 
-    def draw2d_map_slp(self):
+    def draw2d_map_slp(self, ifrm, itsk=0):
         '''
         draw 2d spatial sea level pressure map
         ifrm: ith frame in wrf_list
         '''
         varname='slp'#'hPa'
         title_txt=varname+'@'+str(self.time_frms[ifrm])
-        utils.write_log('paint '+title_txt)
-        var = wrf.getvar(self.wrf_list, varname, timeidx=ifrm)
-        
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+        var = self.get_single_var2d(varname, ifrm)
         ax=self.set_canvas_common(var)
         
         cmap=cmaps.BlGrYeOrReVi200
