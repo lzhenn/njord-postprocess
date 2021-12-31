@@ -2,7 +2,9 @@
 
 Njord postprocess pipeline is a package to postprocess WRF+ROMS+SWAN output in the framework of COAWST.
 
-It take advantage of multiprocessing to accelerate postprocessing.
+It take advantages of multiprocessing to accelerate postprocessing.
+The individual module can be applied to WRF, ROMS, or SWAN independently.
+
 
 ### Usage
 
