@@ -9,8 +9,12 @@ from netCDF4 import Dataset
 
 import cmaps
 import numpy as np
+import pandas as pd
+from datetime import datetime
 import cartopy.crs as ccrs
 import cartopy.io.shapereader as shpreader
+from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
+from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 import shapely.geometry as sgeom
 import matplotlib
 import matplotlib.pyplot as plt
@@ -60,7 +64,9 @@ class WRFPainter(painter.Painter):
         self.time_frms=wrf.extract_times(
                 wrf_list, timeidx=wrf.ALL_TIMES, 
                 method='cat', do_xtime=False)
-        
+        self.time_frms = pd.to_datetime(
+            np.datetime_as_string(self.time_frms,unit='h'),
+            format='%Y-%m-%dT%H')
         
         lsmask = wrf.getvar(wrf_list[0], 'LANDMASK')
         
@@ -72,7 +78,11 @@ class WRFPainter(painter.Painter):
     def set_canvas_common(self,var):
         if self.wrf_idom=='d01':
              amdn_shp=shpreader.Reader(CWD+'/shp/'+SHP_LV1).geometries()
+             lat_sp = 5.0 
+             lon_sp = 5.0
+
         proj=wrf.get_cartopy(var)
+        lats, lons = wrf.latlon_coords(var)
         
         fig = plt.figure(figsize=[10, 8],frameon=True)
         
@@ -81,6 +91,22 @@ class WRFPainter(painter.Painter):
 
         # Set figure extent
         #ax.set_extent([109, 118, 20, 26],crs=ccrs.PlateCarree())
+        #ax.set_xticks(np.arange(np.ceil(lons[0,0]),np.floor(lons[0,-1]),lat_sp), crs=ccrs.PlateCarree())
+        #ax.set_yticks(np.arange(np.ceil(lats[0,0]),np.floor(lats[-1,0]),lon_sp), crs=ccrs.PlateCarree())
+        #ax.xaxis.set_major_formatter(LONGITUDE_FORMATTER) 
+        #ax.yaxis.set_major_formatter(LATITUDE_FORMATTER)
+        #ax.xaxis.set_major_formatter(LongitudeFormatter())
+        #ax.yaxis.set_major_formatter(LatitudeFormatter())
+        gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
+                color='grey', linestyle='--', linewidth=1)
+        gl.xlabels_top = False
+        gl.ylabels_right = False
+        #gl.xlines = False
+        #gl.xlocator = mticker.FixedLocator([-180, -45, 0, 45, 180])
+        #gl.xformatter = LONGITUDE_FORMATTER
+        #gl.yformatter = LATITUDE_FORMATTER
+        #gl.xlabel_style = {'size': 15, 'color': 'gray'}
+        #gl.xlabel_style = {'color': 'red', 'weight': 'bold'}
 
         # plot shp boundaries
         ax.add_geometries(
@@ -109,7 +135,7 @@ class WRFPainter(painter.Painter):
         ifrm: ith frame in wrf_list
         '''
         varname='T2'
-        title_txt=varname+'@'+str(self.time_frms[ifrm])
+        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         
         var = self.get_single_var2d(varname, ifrm)
@@ -139,26 +165,30 @@ class WRFPainter(painter.Painter):
         ifrm: ith frame in wrf_list
         '''
         varname='rh2'
-        title_txt=varname+'@'+str(self.time_frms[ifrm])
+        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         
         var = self.get_single_var2d(varname, ifrm)
         
         ax=self.set_canvas_common(var)
         
-        cmap=cmaps.BlGrYeOrReVi200
-        levels=np.linspace(1,100,50)
+        cmap=matplotlib.colors.ListedColormap(
+            cmaps.CBR_drywet(
+            np.concatenate((np.arange(0,5,1),np.arange(6,11,1)))))
+        levels=np.arange(20,110,10)
+        norm = matplotlib.colors.BoundaryNorm(boundaries=levels, 
+            ncolors=cmap.N,extend='both')
         
         plt.contourf(
                 wrf.to_np(self.lons), wrf.to_np(self.lats), 
                 wrf.to_np(var),
                 levels=levels, extend='both', 
-                transform=ccrs.PlateCarree(), cmap=cmap)
+                transform=ccrs.PlateCarree(), cmap=cmap,norm=norm)
         
         plt.title(title_txt, fontsize=SMFONT)
 
         # Add a color bar
-        plt.colorbar(ax=ax, shrink=0.7)
+        plt.colorbar(ax=ax, shrink=0.7,extendfrac='auto')
         
         self.savefig(plt, varname, ifrm)
     
@@ -168,40 +198,42 @@ class WRFPainter(painter.Painter):
         ifrm: ith frame in wrf_list
         '''
         varname='UV10'
-        title_txt=varname+'@'+str(self.time_frms[ifrm])
+        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         u = self.get_single_var2d('U10', ifrm)
         v = self.get_single_var2d('V10', ifrm)
         
-        var = u
+        var = self.get_single_var2d('slp', ifrm)
         var.data = np.power((np.power(u.data,2)+np.power(v.data,2)),0.5)
         
         ax=self.set_canvas_common(var)
         
-        cmap=cmaps.BlGrYeOrReVi200
-        levels=np.linspace(0,50,50)
+        cmap=cmaps.wind_17lev
+        levels=np.arange(0,34,2)
+        norm = matplotlib.colors.BoundaryNorm(boundaries=levels, 
+            ncolors=cmap.N,extend='both')
         
         shad = plt.contourf(
                 wrf.to_np(self.lons), wrf.to_np(self.lats), 
                 wrf.to_np(var),
                 levels=levels, extend='both', 
-                transform=ccrs.PlateCarree(), cmap=cmap)
+                transform=ccrs.PlateCarree(), cmap=cmap,norm=norm)
         
-        q_mis=8 # wind vector plotting every q_miss grid
+        q_mis=12 # wind vector plotting every q_miss grid
         quv = ax.quiver(wrf.to_np(self.lons[::q_mis,::q_mis]),
                    wrf.to_np(self.lats[::q_mis,::q_mis]),
                    wrf.to_np(u[::q_mis,::q_mis]),wrf.to_np(v[::q_mis,::q_mis]),
-                   pivot='mid',units='inches',scale=30,
+                   pivot='mid',units='inches',scale=40,
                    scale_units='inches',color="dimgray",
                    width=0.02,headwidth=3,headlength=4.5,transform=ccrs.PlateCarree())
 
-        plt.quiverkey(quv, 0.87, 0.45, 10, r'$10 m/s$', labelpos='N',
+        plt.quiverkey(quv, 0.77, 0.1, 10, r'$10 m/s$', labelpos='N',
                        coordinates='figure')
         
         plt.title(title_txt, fontsize=SMFONT)
 
         # Add a color bar
-        plt.colorbar(shad, ax=ax, shrink=0.7)
+        plt.colorbar(shad, ax=ax, shrink=0.7,extendfrac='auto')
         
         self.savefig(plt, varname, ifrm)
     
@@ -213,7 +245,7 @@ class WRFPainter(painter.Painter):
         if ifrm<3:
             return
         varname='pr3h'
-        title_txt=varname+'@'+str(self.time_frms[ifrm])
+        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         var0c = self.get_single_var2d('RAINC', ifrm)
         var0nc = self.get_single_var2d('RAINNC', ifrm)
@@ -239,7 +271,7 @@ class WRFPainter(painter.Painter):
         plt.title(title_txt, fontsize=SMFONT)
 
         # Add a color bar
-        plt.colorbar(ax=ax, shrink=0.7)
+        plt.colorbar(ax=ax, shrink=0.7,extendfrac='auto')
         
         self.savefig(plt, varname, ifrm)
 
@@ -249,7 +281,7 @@ class WRFPainter(painter.Painter):
         ifrm: ith frame in wrf_list
         '''
         varname='slp'#'hPa'
-        title_txt=varname+'@'+str(self.time_frms[ifrm])
+        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         var = self.get_single_var2d(varname, ifrm)
         ax=self.set_canvas_common(var)
