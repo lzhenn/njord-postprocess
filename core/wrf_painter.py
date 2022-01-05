@@ -38,7 +38,8 @@ SHP_LV1='cnhimap.dbf'
 SHP_LV2='gadm36_CHN_2.dbf'
 # County level
 SHP_LV3='county_2004.dbf'
-#SHP_LV3='china_coastline.dbf'
+# For D03 Coastline
+SHP_LV4='china_coastline.dbf'
 # -------Global Envrionmental Vars--------
 
 
@@ -46,7 +47,7 @@ class WRFPainter(painter.Painter):
     """WRF Painter"""
     def update(self, cfg):
         '''update WRF specific files'''
-        self.wrf_num_dom=cfg['WRF']['num_dom']
+        self.wrf_num_dom=int(cfg['WRF']['num_dom'])
 
     def load_data(self, dom_id):
         '''load WRF files according to domain ID'''
@@ -76,10 +77,7 @@ class WRFPainter(painter.Painter):
         utils.write_log('fecthed %3d wrfout files' % len(wrf_list))
 
     def set_canvas_common(self,var):
-        if self.wrf_idom=='d01':
-             amdn_shp=shpreader.Reader(CWD+'/shp/'+SHP_LV1).geometries()
-             lat_sp = 5.0 
-             lon_sp = 5.0
+        '''set common properties of the canvas'''
 
         proj=wrf.get_cartopy(var)
         lats, lons = wrf.latlon_coords(var)
@@ -89,38 +87,44 @@ class WRFPainter(painter.Painter):
         # Set projection and plot the main figure
         ax = fig.add_axes([0.08, 0.01, 0.8, 0.94], projection=proj)
 
-        # Set figure extent
-        #ax.set_extent([109, 118, 20, 26],crs=ccrs.PlateCarree())
-        #ax.set_xticks(np.arange(np.ceil(lons[0,0]),np.floor(lons[0,-1]),lat_sp), crs=ccrs.PlateCarree())
-        #ax.set_yticks(np.arange(np.ceil(lats[0,0]),np.floor(lats[-1,0]),lon_sp), crs=ccrs.PlateCarree())
-        #ax.xaxis.set_major_formatter(LONGITUDE_FORMATTER) 
-        #ax.yaxis.set_major_formatter(LATITUDE_FORMATTER)
-        #ax.xaxis.set_major_formatter(LongitudeFormatter())
-        #ax.yaxis.set_major_formatter(LatitudeFormatter())
+        # add gridlines
         gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
                 color='grey', linestyle='--', linewidth=1)
-        gl.xlabels_top = False
-        gl.ylabels_right = False
-        #gl.xlines = False
-        #gl.xlocator = mticker.FixedLocator([-180, -45, 0, 45, 180])
-        #gl.xformatter = LONGITUDE_FORMATTER
-        #gl.yformatter = LATITUDE_FORMATTER
-        #gl.xlabel_style = {'size': 15, 'color': 'gray'}
-        #gl.xlabel_style = {'color': 'red', 'weight': 'bold'}
+        gl.top_labels = False
+        gl.right_labels = False
+        
+ 
+        if self.wrf_idom=='d01':
+            amdn_shp=shpreader.Reader(CWD+'/shp/'+SHP_LV1).geometries()
+            ax.coastlines()
+        elif self.wrf_idom=='d02':
+            amdn_shp=shpreader.Reader(CWD+'/shp/'+SHP_LV3).geometries()
+            amdn_shp_outer=shpreader.Reader(CWD+'/shp/'+SHP_LV1).geometries()
+            ax.add_geometries(
+                    amdn_shp_outer, ccrs.PlateCarree(),
+                    facecolor='none', edgecolor='black',linewidth=1, zorder = 1)
+            ax.coastlines()
+        elif self.wrf_idom=='d03':
+            amdn_shp=shpreader.Reader(CWD+'/shp/'+SHP_LV3).geometries()
+            amdn_shp_outer=shpreader.Reader(CWD+'/shp/'+SHP_LV4).geometries()
+            ax.add_geometries(
+                    amdn_shp_outer, ccrs.PlateCarree(),
+                    facecolor='none', edgecolor='black',linewidth=1, zorder = 1)
 
         # plot shp boundaries
         ax.add_geometries(
                 amdn_shp, ccrs.PlateCarree(),
                 facecolor='none', edgecolor='black',linewidth=.5, zorder = 1)
-        ax.coastlines()
-
+        
         return ax    
     
     def savefig(self, fig, varname, ifrm):
         '''save fig portal'''
+        save_dir=self.fig_root+'/'+self.init_ts
+        if not(os.path.isdir(save_dir)):
+                os.mkdir(save_dir)        
         plt.savefig(
-                self.fig_root+'/'+self.init_ts
-                +'/'+self.wrf_idom+'.'+varname+'.p%03d.' % ifrm, 
+                save_dir+'/'+self.wrf_idom+'.'+varname+'.p%03d.' % ifrm, 
                 dpi=120, bbox_inches='tight')
 
     def get_single_var2d(self, varname, ifrm):
@@ -135,7 +139,11 @@ class WRFPainter(painter.Painter):
         ifrm: ith frame in wrf_list
         '''
         varname='T2'
-        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
+
+
+        unit='$^\circ$C'
+        title_txt=self.wrf_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         
         var = self.get_single_var2d(varname, ifrm)
@@ -143,7 +151,7 @@ class WRFPainter(painter.Painter):
         ax=self.set_canvas_common(var)
         
         cmap=cmaps.BlGrYeOrReVi200
-        levels=np.linspace(-20,45,66)
+        levels=np.linspace(-10,40,101)
         
         plt.contourf(
                 wrf.to_np(self.lons), wrf.to_np(self.lats), 
@@ -165,7 +173,10 @@ class WRFPainter(painter.Painter):
         ifrm: ith frame in wrf_list
         '''
         varname='rh2'
-        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
+        unit='%'
+        title_txt=self.wrf_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
+        
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         
         var = self.get_single_var2d(varname, ifrm)
@@ -198,7 +209,11 @@ class WRFPainter(painter.Painter):
         ifrm: ith frame in wrf_list
         '''
         varname='UV10'
-        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
+        
+        unit='m/s'
+        title_txt=self.wrf_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
+        
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         u = self.get_single_var2d('U10', ifrm)
         v = self.get_single_var2d('V10', ifrm)
@@ -245,7 +260,9 @@ class WRFPainter(painter.Painter):
         if ifrm<3:
             return
         varname='pr3h'
-        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
+        unit='mm/3hr'
+        title_txt=self.wrf_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         var0c = self.get_single_var2d('RAINC', ifrm)
         var0nc = self.get_single_var2d('RAINNC', ifrm)
@@ -281,7 +298,9 @@ class WRFPainter(painter.Painter):
         ifrm: ith frame in wrf_list
         '''
         varname='slp'#'hPa'
-        title_txt=varname+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
+        unit='hPa'
+        title_txt=self.wrf_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
         var = self.get_single_var2d(varname, ifrm)
         ax=self.set_canvas_common(var)

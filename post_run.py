@@ -14,11 +14,6 @@ from utils import utils
 from multiprocessing import Pool
 import sys
 
-if len(sys.argv) >= 2 :
-    option=sys.argv[1]
-else:
-    option="none"
-
 CWD=sys.path[0]
 def main_run():
     """Main run script"""    
@@ -37,50 +32,53 @@ def main_run():
         # update the obj with wrf specific config paras
         wrf_painter.update(cfg)
         
-        # load seriel output data
-        wrf_painter.load_data('d01')
-        
-               
         ntasks=int(cfg['WRF']['ntasks'])
-        nfile=wrf_painter.wrf_num_file
-        if ntasks > nfile:
-            ntasks=nfile
-        len_per_task=nfile//ntasks
-
-        # start process pool
-        process_pool = Pool(processes=ntasks)
-        results=[]
-
-        if option == "debug":
-            result=process_pool.apply_async(
-                run_mtsk, 
-                args=(0, 3, 4, wrf_painter, ))
-            results.append(result)
-            print(results[0].get()) 
-            process_pool.close()
-            process_pool.join()    
-        else:
-            # open tasks ID 0 to ntasks-1
-            for itsk in range(0, ntasks-1):  
+        for idom in range(1, wrf_painter.wrf_num_dom+1):
+            dom_id='d%02d' % idom
+            utils.write_log('Deal with WRFOUT %s' % dom_id)
+            # load seriel output data
+            wrf_painter.load_data(dom_id)
                 
-                istrt=itsk*len_per_task    
-                iend=(itsk+1)*len_per_task-1        
+            nfile=wrf_painter.wrf_num_file
+            
+            if ntasks > nfile:
+                ntasks=nfile
+            len_per_task=nfile//ntasks
+
+            # start process pool
+            process_pool = Pool(processes=ntasks)
+            results=[]
+
+            if cfg['WRF'].getboolean('debug'):
                 result=process_pool.apply_async(
                     run_mtsk, 
-                    args=(itsk, istrt, iend, wrf_painter, ))
+                    args=(0, 3, 4, wrf_painter, ))
                 results.append(result)
+                print(results[0].get()) 
+                process_pool.close()
+                process_pool.join()    
+            else:
+                # open tasks ID 0 to ntasks-1
+                for itsk in range(0, ntasks-1):  
+                    
+                    istrt=itsk*len_per_task    
+                    iend=(itsk+1)*len_per_task-1        
+                    result=process_pool.apply_async(
+                        run_mtsk, 
+                        args=(itsk, istrt, iend, wrf_painter, ))
+                    results.append(result)
 
-            # open ID ntasks-1 in case of residual
-            istrt=(ntasks-1)*len_per_task
-            iend=nfile-1
-            result=process_pool.apply_async(
-                run_mtsk, 
-                args=(ntasks-1, istrt, iend, wrf_painter, ))
+                # open ID ntasks-1 in case of residual
+                istrt=(ntasks-1)*len_per_task
+                iend=nfile-1
+                result=process_pool.apply_async(
+                    run_mtsk, 
+                    args=(ntasks-1, istrt, iend, wrf_painter, ))
 
-            results.append(result)
-            print(results[0].get()) 
-            process_pool.close()
-            process_pool.join()    
+                results.append(result)
+                #print(results[0].get()) 
+                process_pool.close()
+                process_pool.join()    
     print('*************************POSTPROCESS COMPLETED*************************')
 
 
