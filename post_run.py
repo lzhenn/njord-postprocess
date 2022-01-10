@@ -33,7 +33,13 @@ def main_run():
         wrf_painter.update(cfg)
         
         ntasks=int(cfg['WRF']['ntasks'])
-        for idom in range(1, wrf_painter.wrf_num_dom+1):
+        
+        if cfg['WRF'].getboolean('innermost_flag'):
+            idom_strt=wrf_painter.wrf_num_dom
+        else:
+            idom_strt=1
+        
+        for idom in range(idom_strt, wrf_painter.wrf_num_dom+1):
             dom_id='d%02d' % idom
             utils.write_log('Deal with WRFOUT %s' % dom_id)
             # load seriel output data
@@ -91,14 +97,17 @@ def run_mtsk(itsk, istrt, iend, wrf_painter):
     painter: painter obj 
     """
     # read the rest files in the list
-    for idx in range(istrt, iend):
+    for idx in range(istrt, iend+1):
         utils.write_log('TASK[%02d]: Process %04d of %04d --- %s' % (
                 itsk, idx, iend, wrf_painter.file_list[idx]))
-        wrf_painter.draw2d_map_t2(idx, itsk)
-        wrf_painter.draw2d_map_rh2(idx, itsk)
-        wrf_painter.draw2d_map_wind10(idx, itsk)
-        wrf_painter.draw2d_map_slp(idx, itsk)
-        wrf_painter.draw2d_map_pr3h(idx, itsk)
+        #wrf_painter.draw2d_map_t2(idx, itsk)
+        #wrf_painter.draw2d_map_rh2(idx, itsk)
+        #wrf_painter.draw2d_map_wind10(idx, itsk)
+        #wrf_painter.draw2d_map_slp(idx, itsk)
+        #wrf_painter.draw2d_map_pr(idx, 3, itsk)
+        #wrf_painter.draw2d_map_pr(idx, 6, itsk)
+        wrf_painter.draw2d_map_pr(idx, 12,itsk)
+        wrf_painter.draw2d_map_pr(idx, 24,itsk)
         
     return 0 
 

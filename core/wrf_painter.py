@@ -133,6 +133,10 @@ class WRFPainter(painter.Painter):
         var = wrf.getvar(wrf_file, varname, timeidx=0)
         return var
 
+
+    def draw_ts_t2rh2(self, loc):
+        pass
+
     def draw2d_map_t2(self, ifrm, itsk=0):
         '''
         draw 2d spatial 2-m temperature map
@@ -218,10 +222,8 @@ class WRFPainter(painter.Painter):
         u = self.get_single_var2d('U10', ifrm)
         v = self.get_single_var2d('V10', ifrm)
         
-        var = self.get_single_var2d('slp', ifrm)
-        var.data = np.power((np.power(u.data,2)+np.power(v.data,2)),0.5)
-        
-        ax=self.set_canvas_common(var)
+        wspd10 = self.get_single_var2d('wspd_wdir10', ifrm)[0,:,:]
+        ax=self.set_canvas_common(wspd10)
         
         cmap=cmaps.wind_17lev
         levels=np.arange(0,34,2)
@@ -230,7 +232,7 @@ class WRFPainter(painter.Painter):
         
         shad = plt.contourf(
                 wrf.to_np(self.lons), wrf.to_np(self.lats), 
-                wrf.to_np(var),
+                wrf.to_np(wspd10),
                 levels=levels, extend='both', 
                 transform=ccrs.PlateCarree(), cmap=cmap,norm=norm)
         
@@ -252,25 +254,25 @@ class WRFPainter(painter.Painter):
         
         self.savefig(plt, varname, ifrm)
     
-    def draw2d_map_pr3h(self, ifrm, itsk=0):
+    def draw2d_map_pr(self, ifrm, hrs, itsk=0):
         '''
-        draw 2d spatial 3-hr total precipitation map
+        draw 2d spatial n-hr total precipitation map
         ifrm: ith frame in wrf_list
         '''
-        if ifrm<3:
+        if ifrm<hrs:
             return
-        varname='pr3h'
-        unit='mm/3hr'
+        varname='pr%dh' % hrs
+        unit='mm/%dhr' % hrs
         title_txt=self.wrf_idom+': '+varname+' ('+unit+') '
         title_txt=title_txt+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
         utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
-        var0c = self.get_single_var2d('RAINC', ifrm)
-        var0nc = self.get_single_var2d('RAINNC', ifrm)
-        var3c = self.get_single_var2d('RAINC', ifrm-3)
-        var3nc = self.get_single_var2d('RAINNC', ifrm-3)
-        var = var0c
-        var.data = (wrf.to_np(var0c) + wrf.to_np(var0nc) - wrf.to_np(var3c)
-                - wrf.to_np(var3nc))
+        rainc0 = self.get_single_var2d('RAINC', ifrm)
+        rainnc0 = self.get_single_var2d('RAINNC', ifrm)
+        rainc_hrs = self.get_single_var2d('RAINC', ifrm-hrs)
+        rainnc_hrs = self.get_single_var2d('RAINNC', ifrm-hrs)
+        var = rainc0
+        var.data = (wrf.to_np(rainc0) + wrf.to_np(rainnc0) - wrf.to_np(rainc_hrs)
+                - wrf.to_np(rainnc_hrs))
 
         ax=self.set_canvas_common(var)
         
