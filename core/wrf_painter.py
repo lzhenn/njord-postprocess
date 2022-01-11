@@ -48,6 +48,11 @@ class WRFPainter(painter.Painter):
     def update(self, cfg):
         '''update WRF specific files'''
         self.wrf_num_dom=int(cfg['WRF']['num_dom'])
+    
+    def load_metadata(self):
+        '''load WRF files according to domain ID'''
+        utils.write_log('get meta data from wrfout...')
+        pass
 
     def load_data(self, dom_id):
         '''load WRF files according to domain ID'''
@@ -73,14 +78,89 @@ class WRFPainter(painter.Painter):
         
         # Get the latitude and longitude points
         self.lats, self.lons = wrf.latlon_coords(lsmask)
-        
+        self.nrow, self.ncol = (
+            self.lats.sizes['south_north'],
+            self.lats.sizes['west_east'])
+            
         utils.write_log('fecthed %3d wrfout files' % len(wrf_list))
+    
+   
+    def locate_sta_pos(self, stas):
+        '''find station position in idom, irow, jcol'''
+        wrf_file=Dataset(self.file_list[0])
+        for sta in stas:
+            res=(wrf.ll_to_xy(wrf_file,sta.lat, sta.lon))
+            irow, icol=res.values[0], res.values[1]
+            if irow<0 or irow>(self.nrow-1):
+                irow=0
+            if icol<0 or icol>(self.nrow-1):
+                icol=0
+            sta.irow, sta.icol=irow, icol
+        return stas 
+ #---------------- Draw Station Time Series ----------------
+    def draw_ts_t2rh2(self, stas):
+        '''draw t2m and rh2m thru all stations'''
+        utils.write_log('Paint t2rh2 time series')
+        wrf_list=[Dataset(itm) for itm in self.file_list]
+        
+        # loop thru stations
+        for sta in stas:
+            irow, icol=sta.irow, sta.icol
+            t2_all=wrf.getvar(
+                    wrf_list,'T2',timeidx=wrf.ALL_TIMES, 
+                    method='cat')
+            t2_series=t2_all[:, irow, icol]
+            
+            # plot
+            fig, ax = plt.subplots()
+            ax.plot(self.time_frms, t2_series, linewidth=2.0)
+            self.savefig_ts(sta.name+'.ts.t2rh2.png')  
+
+    def draw_ts_pr1h(self, stas):
+        '''draw 1hr precipitation thru all stations'''
+        pass
+    
+    def draw_ts_wswd10(self, stas):
+        '''draw 10-m wind speed and dir thru all stations'''
+        pass
+    
+    def draw_ts_swslp(self, stas):
+        '''draw surface shortwave and slp thru all stations'''
+        pass
+    
+    def draw_hov_cloud(self, stas):
+        '''draw hovmoller cloud fraction thru all stations'''
+        pass
+    
+    def draw_hov_rhwind(self, stas):
+        '''draw hovmoller rh and wind thru all stations'''
+        pass
+
+
+
+    def savefig_ts(self, figname):
+        '''save fig portal'''
+        save_dir=self.fig_root+'/'+self.init_ts
+        if not(os.path.isdir(save_dir)):
+                os.mkdir(save_dir)        
+        plt.savefig(
+                save_dir+'/'+figname, 
+                dpi=120, bbox_inches='tight')
+
+
+#---------------- Draw 2D Spatial Plot ----------------
+    def get_single_var2d(self, varname, ifrm):
+        '''get single var 2D in ifrm from wrf file'''
+        wrf_file=Dataset(self.file_list[ifrm])
+        var = wrf.getvar(wrf_file, varname, timeidx=0)
+        return var
 
     def set_canvas_common(self,var):
         '''set common properties of the canvas'''
 
         proj=wrf.get_cartopy(var)
-        lats, lons = wrf.latlon_coords(var)
+        #lats, lons = wrf.latlon_coords(var)
+        lats, lons = self.lats, self.lons
         
         fig = plt.figure(figsize=[10, 8],frameon=True)
         
@@ -118,7 +198,7 @@ class WRFPainter(painter.Painter):
         
         return ax    
     
-    def savefig(self, fig, varname, ifrm):
+    def savefig(self, varname, ifrm):
         '''save fig portal'''
         save_dir=self.fig_root+'/'+self.init_ts
         if not(os.path.isdir(save_dir)):
@@ -127,15 +207,6 @@ class WRFPainter(painter.Painter):
                 save_dir+'/'+self.wrf_idom+'.'+varname+'.p%03d.' % ifrm, 
                 dpi=120, bbox_inches='tight')
 
-    def get_single_var2d(self, varname, ifrm):
-        '''get single var 2D in ifrm from wrf file'''
-        wrf_file=Dataset(self.file_list[ifrm])
-        var = wrf.getvar(wrf_file, varname, timeidx=0)
-        return var
-
-
-    def draw_ts_t2rh2(self, loc):
-        pass
 
     def draw2d_map_t2(self, ifrm, itsk=0):
         '''
@@ -168,7 +239,7 @@ class WRFPainter(painter.Painter):
         # Add a color bar
         plt.colorbar(ax=ax, shrink=0.7)
         
-        self.savefig(plt, varname, ifrm)
+        self.savefig(varname, ifrm)
 
 
     def draw2d_map_rh2(self, ifrm, itsk=0):
@@ -205,7 +276,7 @@ class WRFPainter(painter.Painter):
         # Add a color bar
         plt.colorbar(ax=ax, shrink=0.7,extendfrac='auto')
         
-        self.savefig(plt, varname, ifrm)
+        self.savefig(varname, ifrm)
     
     def draw2d_map_wind10(self, ifrm, itsk=0):
         '''
@@ -252,7 +323,7 @@ class WRFPainter(painter.Painter):
         # Add a color bar
         plt.colorbar(shad, ax=ax, shrink=0.7,extendfrac='auto')
         
-        self.savefig(plt, varname, ifrm)
+        self.savefig(varname, ifrm)
     
     def draw2d_map_pr(self, ifrm, hrs, itsk=0):
         '''
@@ -292,7 +363,7 @@ class WRFPainter(painter.Painter):
         # Add a color bar
         plt.colorbar(ax=ax, shrink=0.7,extendfrac='auto')
         
-        self.savefig(plt, varname, ifrm)
+        self.savefig(varname, ifrm)
 
     def draw2d_map_slp(self, ifrm, itsk=0):
         '''
@@ -321,5 +392,5 @@ class WRFPainter(painter.Painter):
         # Add a color bar
         plt.colorbar(ax=ax, shrink=0.7)
         
-        self.savefig(plt, varname, ifrm)
+        self.savefig(varname, ifrm)
     

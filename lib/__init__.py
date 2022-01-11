@@ -2,4 +2,4 @@
 """
 Module init
 """
-import lib.cfgparser
+import lib.cfgparser, lib.station

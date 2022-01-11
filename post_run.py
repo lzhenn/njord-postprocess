@@ -34,57 +34,71 @@ def main_run():
         
         ntasks=int(cfg['WRF']['ntasks'])
         
+        # --------- Plot 1D time series ---------
+        if cfg['WRF'].getboolean('ts_draw'):
+            wrf_painter.load_data('d03')
+            stas=lib.station.construct_stas()
+            stas=wrf_painter.locate_sta_pos(stas)
+            wrf_painter.draw_ts_t2rh2(stas)
+
+        # --------- Plot 2D spatial map ---------
+        
         if cfg['WRF'].getboolean('innermost_flag'):
             idom_strt=wrf_painter.wrf_num_dom
         else:
             idom_strt=1
-        
-        for idom in range(idom_strt, wrf_painter.wrf_num_dom+1):
-            dom_id='d%02d' % idom
-            utils.write_log('Deal with WRFOUT %s' % dom_id)
-            # load seriel output data
-            wrf_painter.load_data(dom_id)
-                
-            nfile=wrf_painter.wrf_num_file
-            
-            if ntasks > nfile:
-                ntasks=nfile
-            len_per_task=nfile//ntasks
 
-            # start process pool
-            process_pool = Pool(processes=ntasks)
-            results=[]
-
-            if cfg['WRF'].getboolean('debug'):
-                result=process_pool.apply_async(
-                    run_mtsk, 
-                    args=(0, 3, 4, wrf_painter, ))
-                results.append(result)
-                print(results[0].get()) 
-                process_pool.close()
-                process_pool.join()    
-            else:
-                # open tasks ID 0 to ntasks-1
-                for itsk in range(0, ntasks-1):  
+        if cfg['WRF'].getboolean('spatial_draw'):
+            for idom in range(idom_strt, wrf_painter.wrf_num_dom+1):
+                dom_id='d%02d' % idom
+                utils.write_log('Deal with WRFOUT %s' % dom_id)
+                # load seriel output data
+                wrf_painter.load_data(dom_id)
                     
-                    istrt=itsk*len_per_task    
-                    iend=(itsk+1)*len_per_task-1        
+                nfile=wrf_painter.wrf_num_file
+                
+                if ntasks > nfile:
+                    ntasks=nfile
+                len_per_task=nfile//ntasks
+
+                # start process pool
+                process_pool = Pool(processes=ntasks)
+                results=[]
+
+                if cfg['WRF'].getboolean('debug'):
                     result=process_pool.apply_async(
                         run_mtsk, 
-                        args=(itsk, istrt, iend, wrf_painter, ))
+                        args=(0, 3, 4, wrf_painter, ))
                     results.append(result)
+                    print(results[0].get()) 
+                    process_pool.close()
+                    process_pool.join()    
+                else:
+                    # open tasks ID 0 to ntasks-1
+                    for itsk in range(0, ntasks-1):  
+                        
+                        istrt=itsk*len_per_task    
+                        iend=(itsk+1)*len_per_task-1        
+                        result=process_pool.apply_async(
+                            run_mtsk, 
+                            args=(itsk, istrt, iend, wrf_painter, ))
+                        results.append(result)
 
-                # open ID ntasks-1 in case of residual
-                istrt=(ntasks-1)*len_per_task
-                iend=nfile-1
-                result=process_pool.apply_async(
-                    run_mtsk, 
-                    args=(ntasks-1, istrt, iend, wrf_painter, ))
+                    # open ID ntasks-1 in case of residual
+                    istrt=(ntasks-1)*len_per_task
+                    iend=nfile-1
+                    result=process_pool.apply_async(
+                        run_mtsk, 
+                        args=(ntasks-1, istrt, iend, wrf_painter, ))
 
-                results.append(result)
-                #print(results[0].get()) 
-                process_pool.close()
-                process_pool.join()    
+                    results.append(result)
+                    #print(results[0].get()) 
+                    process_pool.close()
+                    process_pool.join()    
+                #end if: debug
+            #end for: idom
+        # end if: spatial draw
+    # end if: postprocess WRF
     print('*************************POSTPROCESS COMPLETED*************************')
 
 
@@ -100,14 +114,14 @@ def run_mtsk(itsk, istrt, iend, wrf_painter):
     for idx in range(istrt, iend+1):
         utils.write_log('TASK[%02d]: Process %04d of %04d --- %s' % (
                 itsk, idx, iend, wrf_painter.file_list[idx]))
-        #wrf_painter.draw2d_map_t2(idx, itsk)
+        wrf_painter.draw2d_map_t2(idx, itsk)
         #wrf_painter.draw2d_map_rh2(idx, itsk)
         #wrf_painter.draw2d_map_wind10(idx, itsk)
         #wrf_painter.draw2d_map_slp(idx, itsk)
         #wrf_painter.draw2d_map_pr(idx, 3, itsk)
         #wrf_painter.draw2d_map_pr(idx, 6, itsk)
-        wrf_painter.draw2d_map_pr(idx, 12,itsk)
-        wrf_painter.draw2d_map_pr(idx, 24,itsk)
+        #wrf_painter.draw2d_map_pr(idx, 12,itsk)
+        #wrf_painter.draw2d_map_pr(idx, 24,itsk)
         
     return 0 
 
