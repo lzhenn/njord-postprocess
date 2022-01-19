@@ -40,6 +40,11 @@ def main_run():
             stas=lib.station.construct_stas()
             stas=wrf_painter.locate_sta_pos(stas)
             wrf_painter.draw_ts_t2rh2(stas)
+            wrf_painter.draw_ts_pr1h(stas)
+            wrf_painter.draw_ts_wswd10(stas)
+            wrf_painter.draw_ts_swslp(stas)
+            wrf_painter.draw_hov_cloud(stas)
+            wrf_painter.draw_hov_rhwind(stas)
 
         # --------- Plot 2D spatial map ---------
         
