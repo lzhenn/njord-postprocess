@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 '''
-Postprocessing controler to dispatch all necessary
+Postprocessing controller to dispatch all necessary
 ploting scripts
 This is the main script to drive the postprocessing
 
@@ -12,13 +12,13 @@ import logging, logging.config
 import lib, core
 from utils import utils
 from multiprocessing import Pool
-import sys
+import sys, os
 
 CWD=sys.path[0]
 def main_run():
     """Main run script"""    
     print('*************************POSTPROCESS START*************************')
-       
+    
     # logging manager
     logging.config.fileConfig(CWD+'/conf/logging_config.ini')
     
@@ -26,6 +26,7 @@ def main_run():
     utils.write_log('Read Config...')
     cfg=lib.cfgparser.read_cfg(CWD+'/conf/config.fcst.post.ini')
 
+    #------------------------------WRF Postprocessing------------------------------
     if cfg['WRF'].getboolean('wrf_flag'):
         # construnct wrf painter obj
         wrf_painter=core.wrf_painter.WRFPainter(cfg)
@@ -33,7 +34,7 @@ def main_run():
         wrf_painter.update(cfg)
         
         ntasks=int(cfg['WRF']['ntasks'])
-        
+         
         # --------- Plot 1D time series ---------
         if cfg['WRF'].getboolean('ts_draw'):
             wrf_painter.load_data('d03')
@@ -66,7 +67,7 @@ def main_run():
                     ntasks=nfile
                 len_per_task=nfile//ntasks
 
-                # start process pool
+                # MULTIPROCESSING: start process pool
                 process_pool = Pool(processes=ntasks)
                 results=[]
 
@@ -75,7 +76,7 @@ def main_run():
                         run_mtsk, 
                         args=(0, 3, 4, wrf_painter, ))
                     results.append(result)
-                    print(results[0].get()) 
+                    #print(results[0].get()) 
                     process_pool.close()
                     process_pool.join()    
                 else:
@@ -97,14 +98,120 @@ def main_run():
                         args=(ntasks-1, istrt, iend, wrf_painter, ))
 
                     results.append(result)
-                    #print(results[0].get()) 
+                    print(results[0].get()) 
                     process_pool.close()
                     process_pool.join()    
+                # MULTIPROCESSING: end process pool
+
                 #end if: debug
             #end for: idom
         # end if: spatial draw
+
+        # form animation
+        if cfg['WRF'].getboolean('form_animation'):
+            wrf_painter.form_anim()
+    
     # end if: postprocess WRF
+
+
+    #------------------------------ROMS Postprocessing------------------------------
+    if cfg['ROMS'].getboolean('roms_flag'):
+        # construnct roms painter obj
+        roms_painter=core.roms_painter.ROMSPainter(cfg)
+        # update the obj with roms specific config paras
+        roms_painter.update(cfg)
+        ntasks=int(cfg['ROMS']['ntasks'])         
+        dom_id='d01'
+        utils.write_log('Deal with ROMSOUT %s' % dom_id)
+        # --------- Plot 1D time series ---------
+        if cfg['ROMS'].getboolean('ts_draw'):
+            roms_painter.load_data(dom_id)
+            stas=lib.station.construct_stas()
+            stas=roms_painter.locate_sta_pos(stas)
+            roms_painter.draw_ts_sstsss(stas)
+            #roms_painter.draw_ts_hwave_lwavep(stas)
+            #roms_painter.draw_ts_zeta(stas)
+            #roms_painter.draw_hov_swt(stas, 500) # sea water temperature
+            #roms_painter.draw_hov_sws(stas, 500) # sea water salinity 
+
+        # --------- Plot 2D spatial map ---------
+        if cfg['ROMS'].getboolean('spatial_draw'):
+            roms_painter.load_data(dom_id)
+            nfile=roms_painter.roms_num_file
+            
+            if ntasks > nfile:
+                ntasks=nfile
+            len_per_task=nfile//ntasks
+
+            # MULTIPROCESSING: start process pool
+            process_pool = Pool(processes=ntasks)
+            results=[]
+
+            if cfg['ROMS'].getboolean('debug'):
+                result=process_pool.apply_async(
+                    run_mtsk_roms, 
+                    args=(0, 1, 2, roms_painter, ))
+                results.append(result)
+                #print(results[0].get()) 
+                process_pool.close()
+                process_pool.join()    
+            else:
+                # open tasks ID 0 to ntasks-1
+                for itsk in range(0, ntasks-1):  
+                    
+                    istrt=itsk*len_per_task    
+                    iend=(itsk+1)*len_per_task-1        
+                    result=process_pool.apply_async(
+                        run_mtsk_roms, 
+                        args=(itsk, istrt, iend, roms_painter, ))
+                    results.append(result)
+
+                # open ID ntasks-1 in case of residual
+                istrt=(ntasks-1)*len_per_task
+                iend=nfile-1
+                result=process_pool.apply_async(
+                    run_mtsk_roms, 
+                    args=(ntasks-1, istrt, iend, roms_painter, ))
+
+                results.append(result)
+                #print(results[0].get()) 
+                process_pool.close()
+                process_pool.join()    
+            # MULTIPROCESSING: end process pool
+
+            #end if: debug
+        # end if: spatial draw
+
+        # form animation
+        if cfg['ROMS'].getboolean('form_animation'):
+            roms_painter.form_anim()
+    # end if: postprocess ROMS
+
     print('*************************POSTPROCESS COMPLETED*************************')
+
+def run_mtsk_roms(itsk, istrt, iend, roms_painter):
+    """
+    multitask painting
+    ------------------
+    itask: task ID
+    ilen: length of paintings per task
+    painter: painter obj 
+    """
+    # read the rest files in the list
+    for ifile in range(istrt, iend+1):
+        fn=roms_painter.file_list[ifile]
+        utils.write_log('TASK[%02d]: Process File: %04d of %04d --- %s' % (
+                itsk, ifile, iend, fn ))
+        # loop all frames in the file
+        for ifrm in range(0, roms_painter.nfrms_file):
+            roms_painter.draw2d_map_sst(fn, ifrm, itsk)
+            #roms_painter.draw2d_map_sss(fn, ifrm, itsk)
+            #roms_painter.draw2d_map_zeta(fn, ifrm, itsk)
+            #roms_painter.draw2d_map_hwave(fn, ifrm, itsk)
+            #roms_painter.draw2d_map_lwavep(fn, ifrm, itsk)
+            #roms_painter.draw2d_map_surfcurr(fn, ifrm, itsk)
+        
+    return 0 
 
 
 def run_mtsk(itsk, istrt, iend, wrf_painter):
@@ -120,15 +227,17 @@ def run_mtsk(itsk, istrt, iend, wrf_painter):
         utils.write_log('TASK[%02d]: Process %04d of %04d --- %s' % (
                 itsk, idx, iend, wrf_painter.file_list[idx]))
         wrf_painter.draw2d_map_t2(idx, itsk)
-        #wrf_painter.draw2d_map_rh2(idx, itsk)
-        #wrf_painter.draw2d_map_wind10(idx, itsk)
-        #wrf_painter.draw2d_map_slp(idx, itsk)
-        #wrf_painter.draw2d_map_pr(idx, 3, itsk)
-        #wrf_painter.draw2d_map_pr(idx, 6, itsk)
-        #wrf_painter.draw2d_map_pr(idx, 12,itsk)
-        #wrf_painter.draw2d_map_pr(idx, 24,itsk)
+        wrf_painter.draw2d_map_rh2(idx, itsk)
+        wrf_painter.draw2d_map_wind10(idx, itsk)
+        wrf_painter.draw2d_map_slp(idx, itsk)
+        wrf_painter.draw2d_map_pr(idx, 1, itsk)
+        wrf_painter.draw2d_map_pr(idx, 3, itsk)
+        wrf_painter.draw2d_map_pr(idx, 6, itsk)
+        wrf_painter.draw2d_map_pr(idx, 12,itsk)
+        wrf_painter.draw2d_map_pr(idx, 24,itsk)
         
     return 0 
+
 
 if __name__=='__main__':
     main_run()

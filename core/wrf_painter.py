@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 matplotlib.use('Agg') 
 
-import sys, os, subprocess
+import sys, os, subprocess, glob
 import wrf
 
 # -------Global Envrionmental Vars--------
@@ -49,7 +49,8 @@ class WRFPainter(painter.Painter):
     def update(self, cfg):
         '''update WRF specific files'''
         self.wrf_num_dom=int(cfg['WRF']['num_dom'])
-    
+        self.utc_flag=cfg['WRF'].getboolean('wrf_flag')
+
     def load_metadata(self):
         '''load WRF files according to domain ID'''
         utils.write_log('get meta data from wrfout...')
@@ -85,7 +86,7 @@ class WRFPainter(painter.Painter):
             
         utils.write_log('fecthed %3d wrfout files' % len(wrf_list))
     
-   
+
     def locate_sta_pos(self, stas):
         '''find station position in idom, irow, jcol'''
         wrf_file=Dataset(self.file_list[0])
@@ -102,18 +103,33 @@ class WRFPainter(painter.Painter):
     def set_y1y2_axis(self,sta):
         fig = plt.figure(figsize=(10,8)) 
         ax1 = fig.add_axes([0.1, 0.1, 0.9, 0.35])
-        ax1.tick_params(axis='y',labelcolor="blue",
+        ax1.tick_params(axis='y',labelcolor="red",
             labelsize=SMFONT)
         ax1.tick_params(axis='x',labelsize=SMFONT)
        
         ax2 = ax1.twinx()
-        ax2.tick_params(axis='y',labelcolor="red",
+        ax2.tick_params(axis='y',labelcolor="blue",
             labelsize=SMFONT)
         
         plt.title("%s (%.2fN, %.2fE)"%(sta.name, sta.lat,
             sta.lon), fontsize=MIDFONT)
 
         return ax1, ax2
+
+    def form_anim(self):
+        '''form animation from pngs'''
+        save_dir=self.fig_root+'/'+self.init_ts
+        prefix2d_lst=[]
+        lst_png=glob.glob(save_dir+'/*.png')
+        for png in lst_png:
+            fn=png.split('/')[-1]
+            fn=fn.split('.')[0]+'.'+fn.split('.')[1]
+            if not(fn in prefix2d_lst):
+                prefix2d_lst.append(fn)
+        for itm in prefix2d_lst:
+            utils.write_log('form animation for %s' % itm)
+            cmd='convert -delay 30 -loop 0 '+save_dir+'/'+itm+'*.png '+save_dir+'/'+itm+'.gif'
+            subprocess.call(cmd, shell=True) 
 
  #---------------- Draw Station Time Series ----------------
     def draw_ts_t2rh2(self, stas):
@@ -131,19 +147,19 @@ class WRFPainter(painter.Painter):
         # loop thru stations
         for sta in stas:
             irow, icol=sta.irow, sta.icol
-            ts1 = ts1_all[:, irow, icol]
+            ts1 = ts1_all[:, irow, icol]-273.15
             ts2 = ts2_all[:, irow, icol]
             
             # plot
             ax1, ax2 = self.set_y1y2_axis(sta)
             ax1.plot(self.time_frms, ts1, linewidth=2.0, 
-                color="blue")
-            ax1.set_ylabel(r"T2m ($^\circ$C)",color="blue",
+                color="red")
+            ax1.set_ylabel(r"T2m ($^\circ$C)",color="red",
                 fontsize=SMFONT)
             
             ax2.plot(self.time_frms, ts2, linewidth=2.0,
-                color="red")
-            ax2.set_ylabel(r"RH2m (%)",color="red",
+                color="blue")
+            ax2.set_ylabel(r"RH2m (%)",color="blue",
                 fontsize=SMFONT)
             ax2.xaxis.set_major_formatter(
                 mdates.DateFormatter("%b %d\n%H:00"))
@@ -204,15 +220,15 @@ class WRFPainter(painter.Painter):
             
             # plot
             ax1, ax2 = self.set_y1y2_axis(sta)
-            ax1.fill_between(self.time_frms, ts1, color="blue")
-            ax1.set_ylabel(r"wind 10m (m/s)",color="blue",
+            ax1.fill_between(self.time_frms, ts1, color="red")
+            ax1.set_ylabel(r"wind 10m (m/s)",color="red",
                 fontsize=SMFONT)
             
             ax2.plot(self.time_frms, ts2, "o",
-                color="red")
+                color="blue")
             ax2.set_yticks(np.arange(0,361,45))
             ax2.set_yticklabels(wdir)
-            ax2.set_ylabel(r"wind direction",color="red",
+            ax2.set_ylabel(r"wind direction",color="blue",
                 fontsize=SMFONT)
             ax2.xaxis.set_major_formatter(
                 mdates.DateFormatter("%b %d\n%H:00"))
@@ -245,7 +261,7 @@ class WRFPainter(painter.Painter):
             
             ax2.plot(self.time_frms, ts2, "o", 
                 color="red")
-            ax2.set_ylabel(r"SLP (hPa)",color="red",
+            ax2.set_ylabel(r"SLP (hPa)",color="blue",
                 fontsize=SMFONT)
             ax2.xaxis.set_major_formatter(
                 mdates.DateFormatter("%b %d\n%H:00"))
@@ -376,7 +392,7 @@ class WRFPainter(painter.Painter):
         plt.savefig(
                 save_dir+'/'+figname, 
                 dpi=120, bbox_inches='tight')
-
+        plt.close()
 
 #---------------- Draw 2D Spatial Plot ----------------
     def get_single_var2d(self, varname, ifrm):
@@ -431,12 +447,15 @@ class WRFPainter(painter.Painter):
     def savefig(self, varname, ifrm):
         '''save fig portal'''
         save_dir=self.fig_root+'/'+self.init_ts
+        fig_prefix=self.wrf_idom+'.'+varname
+        
         if not(os.path.isdir(save_dir)):
                 os.mkdir(save_dir)        
+       
         plt.savefig(
-                save_dir+'/'+self.wrf_idom+'.'+varname+'.p%03d.' % ifrm, 
+                save_dir+'/'+fig_prefix+'.p%03d.' % ifrm, 
                 dpi=120, bbox_inches='tight')
-
+        plt.close()
 
     def draw2d_map_t2(self, ifrm, itsk=0):
         '''
