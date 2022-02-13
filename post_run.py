@@ -128,11 +128,11 @@ def main_run():
             roms_painter.load_data(dom_id)
             stas=lib.station.construct_stas()
             stas=roms_painter.locate_sta_pos(stas)
-            roms_painter.draw_ts_sstsss(stas)
+            #roms_painter.draw_ts_sstsss(stas)
             #roms_painter.draw_ts_hwave_lwavep(stas)
             #roms_painter.draw_ts_zeta(stas)
-            #roms_painter.draw_hov_swt(stas, 500) # sea water temperature
-            #roms_painter.draw_hov_sws(stas, 500) # sea water salinity 
+            roms_painter.draw_hov_swt(stas, -50, 1) # sea water temperature
+            roms_painter.draw_hov_sws(stas, -50, 1) # sea water salinity 
 
         # --------- Plot 2D spatial map ---------
         if cfg['ROMS'].getboolean('spatial_draw'):
@@ -150,7 +150,7 @@ def main_run():
             if cfg['ROMS'].getboolean('debug'):
                 result=process_pool.apply_async(
                     run_mtsk_roms, 
-                    args=(0, 1, 2, roms_painter, ))
+                    args=(0, 1, 1, roms_painter, ))
                 results.append(result)
                 #print(results[0].get()) 
                 process_pool.close()
@@ -204,12 +204,12 @@ def run_mtsk_roms(itsk, istrt, iend, roms_painter):
                 itsk, ifile, iend, fn ))
         # loop all frames in the file
         for ifrm in range(0, roms_painter.nfrms_file):
-            roms_painter.draw2d_map_sst(fn, ifrm, itsk)
+            #roms_painter.draw2d_map_sst(fn, ifrm, itsk)
             #roms_painter.draw2d_map_sss(fn, ifrm, itsk)
             #roms_painter.draw2d_map_zeta(fn, ifrm, itsk)
             #roms_painter.draw2d_map_hwave(fn, ifrm, itsk)
             #roms_painter.draw2d_map_lwavep(fn, ifrm, itsk)
-            #roms_painter.draw2d_map_surfcurr(fn, ifrm, itsk)
+            roms_painter.draw2d_map_surfcurr(fn, ifrm, itsk)
         
     return 0 
 

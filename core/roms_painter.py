@@ -134,28 +134,158 @@ class ROMSPainter(painter.Painter):
 
     def draw_ts_hwave_lwavep(self, stas):
         '''draw sigwave height and peak wave period thru all stations'''
-        # ref: draw_ts_sstsss
-        pass 
+        # loop thru stations
+        for sta in stas:
+            if sta.is_sea==0:
+                utils.write_log('Station name: %s is not at sea' % sta.name)
+                continue
+            utils.write_log('Paint Hwave&Pwave time series for %s' % sta.name)
+            ts1_all=self.ds_roms['Hwave'][:,sta.irow,sta.icol]
+            ts2_all=self.ds_roms['Pwave_top'][:,sta.irow,sta.icol]
+            
+            # plot
+            ax1, ax2 = self.set_y1y2_axis(sta)
+            ax1.plot(self.time_frms, ts1_all, linewidth=2.0, 
+                color="red")
+            ax1.set_ylabel(r"Hwave (m)",color="red",
+                fontsize=SMFONT)
+            ax2.plot(self.time_frms, ts2_all, linewidth=2.0,
+                color="blue")
+            ax2.set_ylabel(r"Pwave (s)",color="blue",
+                fontsize=SMFONT)
+            ax2.xaxis.set_major_formatter(
+                mdates.DateFormatter("%b %d\n%H:00"))
+            
+            self.savefig_ts(sta.name+'.ts.hwavelwavep.png')  
 
     def draw_ts_zeta(self, stas):
         '''draw free sea surf height thru all stations'''
-        # ref: draw_ts_sstsss
-        pass 
+        # loop thru stations
+        for sta in stas:
+            if sta.is_sea==0:
+                utils.write_log('Station name: %s is not at sea' % sta.name)
+                continue
+            utils.write_log('Paint zeta time series for %s' % sta.name)
+            ts1_all=self.ds_roms['zeta'][:,sta.irow,sta.icol]
+            
+            # plot
+            fig = plt.figure(figsize=(10,8)) 
+            ax1 = fig.add_axes([0.1, 0.1, 0.9, 0.35])
+            ax1.plot(self.time_frms, ts1_all, linewidth=2.0) 
+            
+            ax1.tick_params(axis='both',labelsize=SMFONT)
+            ax1.set_ylabel(r"sea surf height (m)",fontsize=SMFONT)
+            ax1.xaxis.set_major_formatter(
+                mdates.DateFormatter("%b %d\n%H:00"))
+            
+            plt.title("%s (%.2fN, %.2fE)"%(sta.name, sta.lat,
+                sta.lon), fontsize=MIDFONT)
+            self.savefig_ts(sta.name+'.ts.zeta.png')  
 
 #---------------- Draw 2D Hovmoller Plot ----------------
-    def draw_hov_swt(self, stas, max_depth=200):
+    def get_var_timedepth(self, varname, sta, mdepth, sdepth):
+        '''get var 2D plane time versus depth 
+            varname: variable name
+            sta: stations
+            mdepth: max depth
+            sdepth: depth spacing
+        '''
+        zeta = self.ds_roms['zeta'][:,sta.irow,sta.icol] 
+        ds = xr.open_dataset(self.file_list[0])
+        h = ds['h'][sta.irow,sta.icol] 
+        if ds.Vtransform == 1:
+            Zo_rho = ds.hc * (ds.s_rho - ds.Cs_r) + ds.Cs_r * h 
+            z_rho = Zo_rho + zeta * (1 + Zo_rho / h)
+        elif ds.Vtransform == 2:
+            Zo_rho = (ds.hc * ds.s_rho + ds.Cs_r * h) / (ds.hc + h)
+            z_rho = zeta + (zeta + h) * Zo_rho
+        ds.close()
+
+        depth = np.arange(mdepth,0,sdepth)
+        data = np.empty((len(self.time_frms),len(depth)), dtype = float)
+        for nt in range(len(self.time_frms)):
+            term = self.ds_roms[varname][nt,:,sta.irow,sta.icol] 
+            term.coords['s_rho'] = z_rho[nt,:].values
+            data[nt,:] = term.interp(
+                s_rho=depth, method="cubic").values
+
+        var = xr.DataArray(data, coords=[
+            ("ocean_time", self.time_frms), ("z_rho", depth)])
+        return var
+
+    def draw_hov_swt(self, stas, max_depth=-200, sdepth=10):
         '''draw hovmoller sea water temp thru all stations
             stas: list of stations
             max_depth: max depth to plot
+            sdepth: depth spacing used to interp
         '''
-        pass
+        cnlevels = np.arange(20,29.5,0.25)
+        ncmap = matplotlib.colors.ListedColormap(
+            cmaps.MPL_jet(range(0,127,3))) #cmaps.precip2_17lev
+        norm = matplotlib.colors.BoundaryNorm(
+            boundaries=cnlevels,ncolors=ncmap.N,extend='both')
+        
+        # loop thru stations
+        for sta in stas:
+            if sta.is_sea==0:
+                utils.write_log('Station name: %s is not at sea' % sta.name)
+                continue
+            utils.write_log('Paint hovmoller sea water temp for %s' % sta.name)
+            var = self.get_var_timedepth('temp', sta, max_depth, sdepth)
+            
+            # plot
+            fig = plt.figure(figsize=(10,8)) 
+            axe = fig.add_axes([0.1, 0.1, 0.9, 0.35])
+            cont = axe.contourf(var.ocean_time, var.z_rho, var.transpose(), 
+                cnlevels,cmap=ncmap,extend='both',norm=norm)
+            plt.colorbar(cont, ax=axe)
 
-    def draw_hov_sws(self, stas, max_depth=200):
+            axe.set_ylim([max_depth,0])
+            axe.set_ylabel("depth (m)",fontsize=SMFONT)  # Add an x-label to the axes.
+            axe.tick_params(axis='both',labelsize=SMFONT)
+            axe.xaxis.set_major_formatter(
+                mdates.DateFormatter("%b %d\n%H:00"))
+            
+            plt.title("%s (%.2fN, %.2fE) oceam temp ($^\circ$C)"%(
+                sta.name, sta.lat, sta.lon), fontsize=MIDFONT)
+            self.savefig_ts(sta.name+'.hov.swt.png')  
+
+    def draw_hov_sws(self, stas, max_depth=-200,sdepth=10):
         '''draw hovmoller sea water salt thru all stations
             stas: list of stations
             max_depth: max depth to plot
+            sdepth: depth spacing used to interp
         '''
-        pass
+        cnlevels = np.arange(20,39,0.5) #500Z, gpm
+        ncmap = matplotlib.colors.ListedColormap(
+            cmaps.MPL_jet(range(0,127,3))) #cmaps.precip2_17lev
+        norm = matplotlib.colors.BoundaryNorm(
+            boundaries=cnlevels,ncolors=ncmap.N,extend='both')
+        
+        # loop thru stations
+        for sta in stas:
+            if sta.is_sea==0:
+                utils.write_log('Station name: %s is not at sea' % sta.name)
+                continue
+            utils.write_log('Paint hovmoller sea water salt for %s' % sta.name)
+            var = self.get_var_timedepth('salt',sta, max_depth, sdepth)
+            
+            # plot
+            fig = plt.figure(figsize=(10,8)) 
+            axe = fig.add_axes([0.1, 0.1, 0.9, 0.35])
+            cont = axe.contourf(var.ocean_time, var.z_rho, var.transpose(), 
+                cnlevels,cmap=ncmap,extend='both',norm=norm)
+            plt.colorbar(cont, ax=axe)
+
+            axe.set_ylim([max_depth,0])
+            axe.set_ylabel("depth (m)",fontsize=SMFONT)  # Add an x-label to the axes.
+            axe.tick_params(axis='both',labelsize=SMFONT)
+            axe.xaxis.set_major_formatter(
+                mdates.DateFormatter("%b %d\n%H:00"))
+            
+            plt.title("%s (%.2fN, %.2fE) ocean sanility (g/kg)"%(
+                sta.name, sta.lat, sta.lon), fontsize=MIDFONT)
+            self.savefig_ts(sta.name+'.hov.sws.png')  
 
 #---------------- Draw 2D Spatial Plot ----------------
     def draw2d_map_sst(self, fn, ifrm, itsk=0):
@@ -185,28 +315,98 @@ class ROMSPainter(painter.Painter):
         plt.title(title_txt, fontsize=SMFONT)
 
         # Add a color bar
-        plt.colorbar(ax=ax, shrink=0.7)
-        
+        plt.colorbar(ax=ax, shrink=0.5, extendfrac='auto')
         self.savefig(varname, tfrm.dt.strftime('%Y%m%d%H').values)
 
     def draw2d_map_sss(self, fn, ifrm, itsk=0):
         '''
         draw 2d spatial sea surface salinity map
         '''
-        # please refer to draw2d_map_sst
-        pass
+        varname='SSS'
+        unit='g/kg'
+
+        # read sst
+        var2d=self.get_single_var2din3d(fn, 'salt', ifrm, self.isurf)
+        tfrm=var2d['ocean_time']
+        tfrm_str=tfrm.dt.strftime('%Y-%m-%d %H:%M:%S').values
+        title_txt=self.roms_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+tfrm_str
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+
+        ax=self.set_canvas_common()
+        
+        cmap=cmaps.BlGrYeOrReVi200
+        levels=np.linspace(20,45,51)
+        plt.contourf(
+            self.lons, self.lats, 
+            var2d.values,
+            levels=levels, extend='both', 
+            transform=ccrs.PlateCarree(), cmap=cmap)
+        plt.title(title_txt, fontsize=SMFONT)
+
+        # Add a color bar
+        plt.colorbar(ax=ax, shrink=0.5, extendfrac='auto')
+        self.savefig(varname, tfrm.dt.strftime('%Y%m%d%H').values)
 
     def draw2d_map_hwave(self, fn, ifrm, itsk=0):
         '''
-        draw 2d spatial sea surface salinity map
+        draw 2d spatial sigwave height map
         '''
-        # please refer to draw2d_map_sst
-        pass
+        varname='hwave'
+        unit='m'
+
+        # read sst
+        var2d=self.get_single_var2d(fn, 'Hwave', ifrm)
+        tfrm=var2d['ocean_time']
+        tfrm_str=tfrm.dt.strftime('%Y-%m-%d %H:%M:%S').values
+        title_txt=self.roms_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+tfrm_str
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+
+        ax=self.set_canvas_common()
+        
+        cmap=cmaps.BlGrYeOrReVi200
+        levels=np.linspace(0,5,51)
+        plt.contourf(
+            self.lons, self.lats, 
+            var2d.values,
+            levels=levels, extend='both', 
+            transform=ccrs.PlateCarree(), cmap=cmap)
+        plt.title(title_txt, fontsize=SMFONT)
+
+        # Add a color bar
+        plt.colorbar(ax=ax, shrink=0.5, extendfrac='auto')
+        self.savefig(varname, tfrm.dt.strftime('%Y%m%d%H').values)
 
     def draw2d_map_lwavep(self, fn, ifrm, itsk=0):
         '''
-        draw 2d spatial sea surface salinity map
+        draw 2d spatial peak wave period map
         '''
+        varname='lwavep'
+        unit='s'
+
+        # read sst
+        var2d=self.get_single_var2d(fn, 'Pwave_top', ifrm)
+        tfrm=var2d['ocean_time']
+        tfrm_str=tfrm.dt.strftime('%Y-%m-%d %H:%M:%S').values
+        title_txt=self.roms_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+tfrm_str
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+
+        ax=self.set_canvas_common()
+        
+        cmap=cmaps.BlGrYeOrReVi200
+        levels=np.linspace(0,20,51)
+        plt.contourf(
+            self.lons, self.lats, 
+            var2d.values,
+            levels=levels, extend='both', 
+            transform=ccrs.PlateCarree(), cmap=cmap)
+        plt.title(title_txt, fontsize=SMFONT)
+
+        # Add a color bar
+        plt.colorbar(ax=ax, shrink=0.5, extendfrac='auto')
+        self.savefig(varname, tfrm.dt.strftime('%Y%m%d%H').values)
         # please refer to draw2d_map_sst
         pass
 
@@ -214,8 +414,31 @@ class ROMSPainter(painter.Painter):
         '''
         draw 2d spatial free surf height map
         '''
-        # please refer to draw2d_map_sst
-        pass
+        varname='free-surf'
+        unit='m'
+
+        # read sst
+        var2d=self.get_single_var2d(fn, 'zeta', ifrm)
+        tfrm=var2d['ocean_time']
+        tfrm_str=tfrm.dt.strftime('%Y-%m-%d %H:%M:%S').values
+        title_txt=self.roms_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+tfrm_str
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+
+        ax=self.set_canvas_common()
+        
+        cmap=cmaps.BlWhRe
+        levels=np.linspace(-3,3,51)
+        plt.contourf(
+            self.lons, self.lats, 
+            var2d.values,
+            levels=levels, extend='both', 
+            transform=ccrs.PlateCarree(), cmap=cmap)
+        plt.title(title_txt, fontsize=SMFONT)
+
+        # Add a color bar
+        plt.colorbar(ax=ax, shrink=0.5, extendfrac='auto')
+        self.savefig(varname, tfrm.dt.strftime('%Y%m%d%H').values)
 
     def draw2d_map_surfcurr(self, fn, ifrm, itsk=0):
         '''
@@ -223,12 +446,48 @@ class ROMSPainter(painter.Painter):
         shaded contour: velocities m/s
         vectors: u,v
         '''
-        # please refer to draw2d_map_sst
-        pass
+        varname='surfcurr'
+        unit='cm/s'
 
+        # read sst
+        var2d=self.get_single_var2d(fn, 'zeta', ifrm)
+        u=self.get_single_var2d(fn, 'Uwind_eastward', ifrm)
+        v=self.get_single_var2d(fn, 'Vwind_northward', ifrm)
+        u.values=u.values*100
+        v.values=v.values*100
+        var2d.values = np.power((np.power(u.values,2)+np.power(v.values,2)),0.5)
+        
+        tfrm=var2d['ocean_time']
+        tfrm_str=tfrm.dt.strftime('%Y-%m-%d %H:%M:%S').values
+        title_txt=self.roms_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+tfrm_str
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
 
+        ax=self.set_canvas_common()
+        
+        cmap=cmaps.BlGrYeOrReVi200
+        levels=np.linspace(0,50,51)
+        plt.contourf(
+            self.lons, self.lats, 
+            var2d.values,
+            levels=levels, extend='both', 
+            transform=ccrs.PlateCarree(), cmap=cmap)
+        plt.title(title_txt, fontsize=SMFONT)
 
-
+        q_mis=12 # wind vector plotting every q_miss grid
+        quv = ax.quiver(self.lons[::q_mis,::q_mis],
+                   self.lats[::q_mis,::q_mis],
+                   u[::q_mis,::q_mis].values, v[::q_mis,::q_mis].values,
+                   pivot='mid', units='inches', scale=2,
+                   scale_units='inches', color="dimgray",
+                   width=0.02, headwidth=3, headlength=4.5, 
+                   transform=ccrs.PlateCarree())
+        plt.quiverkey(quv, 1.05, -0.05, 1, r'$1 cm/s$', labelpos='N',
+                       coordinates='axes')
+        
+        # Add a color bar
+        plt.colorbar(ax=ax, shrink=0.5, extendfrac='auto')
+        self.savefig(varname, tfrm.dt.strftime('%Y%m%d%H').values)
 
     def get_single_var2d(self, fn, varname, ifrm):
         '''get single var 2D single frame
