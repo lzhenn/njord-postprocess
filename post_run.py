@@ -109,7 +109,7 @@ def main_run():
 
         # form animation
         if cfg['WRF'].getboolean('form_animation'):
-            wrf_painter.form_anim()
+            wrf_painter.form_anim(opt='d03.SST')
     
     # end if: postprocess WRF
 
@@ -226,15 +226,16 @@ def run_mtsk(itsk, istrt, iend, wrf_painter):
     for idx in range(istrt, iend+1):
         utils.write_log('TASK[%02d]: Process %04d of %04d --- %s' % (
                 itsk, idx, iend, wrf_painter.file_list[idx]))
-        wrf_painter.draw2d_map_t2(idx, itsk)
-        wrf_painter.draw2d_map_rh2(idx, itsk)
-        wrf_painter.draw2d_map_wind10(idx, itsk)
-        wrf_painter.draw2d_map_slp(idx, itsk)
-        wrf_painter.draw2d_map_pr(idx, 1, itsk)
-        wrf_painter.draw2d_map_pr(idx, 3, itsk)
-        wrf_painter.draw2d_map_pr(idx, 6, itsk)
-        wrf_painter.draw2d_map_pr(idx, 12,itsk)
-        wrf_painter.draw2d_map_pr(idx, 24,itsk)
+        wrf_painter.draw2d_map_sst(idx, itsk)
+        #wrf_painter.draw2d_map_t2(idx, itsk)
+        #wrf_painter.draw2d_map_rh2(idx, itsk)
+        #wrf_painter.draw2d_map_wind10(idx, itsk)
+        #wrf_painter.draw2d_map_slp(idx, itsk)
+        #wrf_painter.draw2d_map_pr(idx, 1, itsk)
+        #wrf_painter.draw2d_map_pr(idx, 3, itsk)
+        #wrf_painter.draw2d_map_pr(idx, 6, itsk)
+        #wrf_painter.draw2d_map_pr(idx, 12,itsk)
+        #wrf_painter.draw2d_map_pr(idx, 24,itsk)
         
     return 0 
 

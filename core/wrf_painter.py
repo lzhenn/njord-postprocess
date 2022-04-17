@@ -116,7 +116,7 @@ class WRFPainter(painter.Painter):
 
         return ax1, ax2
 
-    def form_anim(self):
+    def form_anim(self, opt=''):
         '''form animation from pngs'''
         save_dir=self.fig_root+'/'+self.init_ts
         prefix2d_lst=[]
@@ -126,6 +126,8 @@ class WRFPainter(painter.Painter):
             fn=fn.split('.')[0]+'.'+fn.split('.')[1]
             if not(fn in prefix2d_lst):
                 prefix2d_lst.append(fn)
+        if opt in prefix2d_lst:
+            prefix2d_lst=[opt]
         for itm in prefix2d_lst:
             utils.write_log('form animation for %s' % itm)
             cmd='convert -delay 30 -loop 0 '+save_dir+'/'+itm+'*.png '+save_dir+'/'+itm+'.gif'
@@ -456,6 +458,40 @@ class WRFPainter(painter.Painter):
                 save_dir+'/'+fig_prefix+'.p%03d.' % ifrm, 
                 dpi=120, bbox_inches='tight')
         plt.close()
+    def draw2d_map_sst(self, ifrm, itsk=0):
+        '''
+        draw 2d spatial SST map
+        ifrm: ith frame in wrf_list
+        '''
+        varname='SST'
+
+
+        unit='$^\circ$C'
+        title_txt=self.wrf_idom+': '+varname+' ('+unit+') '
+        title_txt=title_txt+'@'+self.time_frms[ifrm].strftime('%Y-%m-%d %HZ')
+        utils.write_log('TASK[%02d]: Paint %s' % (itsk, title_txt))
+        
+        var = self.get_single_var2d(varname, ifrm)
+        lsmask = self.get_single_var2d('LANDMASK', ifrm)
+        var=var.where(lsmask==0)
+        ax=self.set_canvas_common(var)
+        
+        cmap=cmaps.BlGrYeOrReVi200
+        levels=np.linspace(27,31,41)
+        
+        plt.contourf(
+                wrf.to_np(self.lons), wrf.to_np(self.lats), 
+                wrf.to_np(var-273.15),
+                levels=levels, extend='both', 
+                transform=ccrs.PlateCarree(), cmap=cmap)
+        
+        plt.title(title_txt, fontsize=SMFONT)
+
+        # Add a color bar
+        plt.colorbar(ax=ax, shrink=0.7)
+        
+        self.savefig(varname, ifrm)
+
 
     def draw2d_map_t2(self, ifrm, itsk=0):
         '''
