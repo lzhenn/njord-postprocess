@@ -187,7 +187,93 @@ def main_run():
             roms_painter.form_anim()
     # end if: postprocess ROMS
 
+    #------------------------------SWAN Postprocessing------------------------------
+    if cfg['SWAN'].getboolean('swan_flag'):
+        # construnct roms painter obj
+        swan_painter=core.swan_painter.SWANPainter(cfg)
+        swan_painter.update(cfg)
+
+        if cfg['SWAN'].getboolean('innermost_flag'):
+            idom_strt=swan_painter.swan_num_dom
+        else:
+            idom_strt=1
+        
+        if cfg['SWAN'].getboolean('ts_draw'):
+            swan_painter.load_metadata('d02')
+            stas=lib.station.construct_stas()
+            stas=swan_painter.locate_sta_pos(stas)
+            swan_painter.draw_ts_hsig(stas)
+   
+        ntasks=int(cfg['SWAN']['ntasks'])
+        # --------- Plot 2D spatial map ---------
+        if cfg['SWAN'].getboolean('spatial_draw'):
+            for idom in range(idom_strt, swan_painter.swan_num_dom+1):
+                dom_id='d%02d' % idom
+                        
+                swan_painter.load_metadata(dom_id)
+                nfile=swan_painter.swan_num_file
+                
+                if ntasks > nfile:
+                    ntasks=nfile
+                    utils.write_log('ntasks reduced to  %02d' % (ntasks))
+                len_per_task=nfile//ntasks
+
+                # MULTIPROCESSING: start process pool
+                process_pool = Pool(processes=ntasks)
+                results=[]
+
+                # open tasks ID 0 to ntasks-1
+                for itsk in range(0, ntasks-1):  
+                    
+                    istrt=itsk*len_per_task    
+                    iend=(itsk+1)*len_per_task-1        
+                    result=process_pool.apply_async(
+                        run_mtsk_swan, 
+                        args=(itsk, istrt, iend, swan_painter, ))
+                    results.append(result)
+
+                # open ID ntasks-1 in case of residual
+                istrt=(ntasks-1)*len_per_task
+                iend=nfile-1
+                result=process_pool.apply_async(
+                    run_mtsk_swan, 
+                    args=(ntasks-1, istrt, iend, swan_painter, ))
+
+                results.append(result)
+                print(results[0].get()) 
+                process_pool.close()
+                process_pool.join()    
+            # MULTIPROCESSING: end process pool
+            # form animation
+            if cfg['SWAN'].getboolean('form_animation'):
+                swan_painter.form_anim('Hsig')
+
+            # --------- Plot 1D time series ---------
+            if cfg['SWAN'].getboolean('ts_draw'):
+                swan_painter.load_data(dom_id)
+   
+    # end if: postprocess SWAN
     print('*************************POSTPROCESS COMPLETED*************************')
+
+def run_mtsk_swan(itsk, istrt, iend, swan_painter):
+    """
+    multitask painting
+    ------------------
+    itask: task ID
+    ilen: length of paintings per task
+    painter: painter obj 
+    """
+    utils.write_log('TASK[%02d]: Deal with SWANOUT %s' % (
+        itsk, swan_painter.swan_idom))
+    # read the rest files in the list
+    for ifile in range(istrt, iend+1):
+        swan_painter.load_data(ifile)
+        for itm in swan_painter.swan_mat_key:
+            swan_painter.draw_2d_map_hsig(itm, itsk)
+
+    return 0 
+
+
 
 def run_mtsk_roms(itsk, istrt, iend, roms_painter):
     """
