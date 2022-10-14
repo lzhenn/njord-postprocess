@@ -36,7 +36,7 @@ SMFONT=14
 # Province level
 SHP_LV1='cnhimap.dbf'
 # City level
-SHP_LV2='gadm36_CHN_2.dbf'
+SHP_LV2='china_coastline.dbf'
 # County level
 SHP_LV3='county_2004.dbf'
 # For D03 Coastline
@@ -427,8 +427,8 @@ class ROMSPainter(painter.Painter):
 
         ax=self.set_canvas_common()
         
-        cmap=cmaps.BlWhRe
-        levels=np.linspace(-3,3,51)
+        cmap=cmaps.cmocean_deep
+        levels=np.linspace(0,3,61)
         plt.contourf(
             self.lons, self.lats, 
             var2d.values,
@@ -539,12 +539,12 @@ class ROMSPainter(painter.Painter):
         gl.right_labels = False
         
  
-        amdn_shp=shpreader.Reader(CWD+'/shp/'+SHP_LV2).geometries()
-        amdn_shp_outer=shpreader.Reader(CWD+'/shp/'+SHP_LV1).geometries()
-        ax.add_geometries(
-            amdn_shp_outer, ccrs.PlateCarree(),
-            facecolor='none', edgecolor='black',linewidth=1, zorder = 1)
-        ax.coastlines()
+        amdn_shp=shpreader.Reader(CWD+'/shp/'+SHP_LV4).geometries()
+        #amdn_shp_outer=shpreader.Reader(CWD+'/shp/'+SHP_LV1).geometries()
+        #ax.add_geometries(
+        #    amdn_shp_outer, ccrs.PlateCarree(),
+        #    facecolor='none', edgecolor='black',linewidth=1, zorder = 1)
+        #ax.coastlines()
         
         # plot shp boundaries
         ax.add_geometries(

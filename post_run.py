@@ -121,7 +121,7 @@ def main_run():
         # update the obj with roms specific config paras
         roms_painter.update(cfg)
         ntasks=int(cfg['ROMS']['ntasks'])         
-        dom_id='d01'
+        dom_id='d02'
         utils.write_log('Deal with ROMSOUT %s' % dom_id)
         # --------- Plot 1D time series ---------
         if cfg['ROMS'].getboolean('ts_draw'):
@@ -292,10 +292,10 @@ def run_mtsk_roms(itsk, istrt, iend, roms_painter):
         for ifrm in range(0, roms_painter.nfrms_file):
             #roms_painter.draw2d_map_sst(fn, ifrm, itsk)
             #roms_painter.draw2d_map_sss(fn, ifrm, itsk)
-            #roms_painter.draw2d_map_zeta(fn, ifrm, itsk)
+            roms_painter.draw2d_map_zeta(fn, ifrm, itsk)
             #roms_painter.draw2d_map_hwave(fn, ifrm, itsk)
             #roms_painter.draw2d_map_lwavep(fn, ifrm, itsk)
-            roms_painter.draw2d_map_surfcurr(fn, ifrm, itsk)
+            #roms_painter.draw2d_map_surfcurr(fn, ifrm, itsk)
         
     return 0 
 
